@@ -36,25 +36,7 @@ D = 2*mu**2/(hbar*eps0*A*Lc*gamma)
 def fa(omega_n,T):
     return 1/(1+np.exp(-hbar*omega_n/(kb*T)))
 def fb(omega_n,T):
-    return np.exp(-hbar*omega_n/(kb*T))/(1+np.exp(-hbar*omega_n/(kb*T)))   
-
-def Ndtv2(Nmati, modes, LOmega, ksum_r, T, Tp, nw, nn=1):
-    range_a = range(nn); range_ok = range(nn, nn+nw)
-    Kernel = np.zeros((nn,nw))
-    Ndti = np.zeros(2*nn+nw)
-    for n in range_a:
-        for k in ksum_r[n]:
-            Kernel[n,k] = ((Nmati[nn+n] - Nmati[n])*Nmati[2*nn+k] + Nmati[nn+n])*LOmega[n,k]
-    Kernel_sn = np.sum(Kernel, axis=0)
-    Kernel_sk = np.sum(Kernel, axis=1)
-    for n in range_a:
-        Lambda_n = Lambda_0*np.exp(hbar*(omega_0-modes[n])/(kb*Tp))
-        Ndti[n] = D*Kernel_sk[n] - Lambda_n*Nmati[n] - gamma_r*(Nmati[n] - N*fa(modes[n],T))
-        Ndti[nn+n] =  -D*Kernel_sk[n] + Lambda_n*Nmati[n] - gamma_r*(Nmati[nn+n] - N*fb(modes[n],T))
-    for k in range_ok:
-        Ndti[nn+k] = D*Kernel_sn[k-nn] - gamma_c*Nmati[nn+k]
-    return Ndti    
- 
+    return np.exp(-hbar*omega_n/(kb*T))/(1+np.exp(-hbar*omega_n/(kb*T)))    
 
 def Ndt(Nmati, modes, LOmega, T, Tp, nw, nn=1):
     
@@ -72,6 +54,15 @@ def Ndt(Nmati, modes, LOmega, T, Tp, nw, nn=1):
     for k in range_ok:
         Ndti[k] = D*Kernel_sn[k-nn] - gamma_c*Nmati[k]
     return Ndti   
+    
+def Ndtv2(Nmati, modes, LOmega, T, Tp, nw, nn=1):
+    Kernel = (np.outer(2*Nmati[:nn]-N*np.ones(nn),Nmati[nn:]) + np.outer(Nmati[:nn],np.ones(nw))) * LOmega
+    Kernel_sn = np.sum(Kernel, axis=0)
+    Kernel_sk = np.sum(Kernel, axis=1)
+    Lambda_n = Lambda_0*np.exp(hbar*(omega_0*np.ones(nn)-modes[:nn])/(kb*Tp))
+    Nbti = -D*Kernel_sk + Lambda_n * (N*np.ones(nn) - Nmati[:nn]) - gamma_r*(Nmati[:nn]-N*fb(modes[:nn],T))
+    Nkti = D*Kernel_sn - gamma_c*Nmati[nn:]
+    return np.hstack((Nbti,Nkti))
 
 
 def Photon_n(Tp, omega_l, omega_u, n, tbound, rcut=1e-4):
@@ -117,7 +108,7 @@ def Photon_n(Tp, omega_l, omega_u, n, tbound, rcut=1e-4):
 #        ksum = [i for i,v in enumerate(LOmega_k/np.max(LOmega_k)) if v>rcut]
 #        ksum_range.append(ksum)
 
-    nsol = integrate.RK45(lambda t, ni: Ndt(ni, modes, LOmega, Temp, Temp_p, nw=nw, nn=n), 
+    nsol = integrate.RK45(lambda t, ni: Ndtv2(ni, modes, LOmega, Temp, Temp_p, nw=nw, nn=n), 
                           t0=0, y0=Ni, t_bound = tbound)
 
     start_time = time.time()
